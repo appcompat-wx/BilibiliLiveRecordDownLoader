@@ -1,6 +1,7 @@
 using BilibiliLiveRecordDownLoader.Models;
 using BilibiliLiveRecordDownLoader.Shared.Utils;
 using DynamicData;
+using Microsoft;
 using ReactiveUI;
 using Serilog.Core;
 using Serilog.Events;
@@ -17,7 +18,7 @@ public class SubjectMemorySink : ILogEventSink
 	public SubjectMemorySink()
 	{
 		_list.Connect()
-			.ObserveOn(RxSchedulers.MainThreadScheduler)
+			.ObserveOn(RxApp.MainThreadScheduler)
 			.Bind(out Logs)
 			.Subscribe();
 		_list.LimitSizeTo(100).Subscribe();
@@ -25,7 +26,7 @@ public class SubjectMemorySink : ILogEventSink
 
 	public void Emit(LogEvent logEvent)
 	{
-		ArgumentNullException.ThrowIfNull(logEvent);
+		Requires.NotNull(logEvent, nameof(logEvent));
 
 		LogModel log = new()
 		{

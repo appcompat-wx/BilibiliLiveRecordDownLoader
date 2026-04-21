@@ -3,7 +3,7 @@ using Microsoft;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using ReactiveUI.Builder;
+using ReactiveUI;
 using Serilog;
 using Serilog.Events;
 using Splat;
@@ -27,7 +27,7 @@ public static class DI
 		}
 #endif
 
-		T? service = AppLocator.Current.GetService<T>();
+		T? service = Locator.Current.GetService<T>();
 
 		Verify.Operation(service is not null, $@"No service for type {typeof(T)} has been registered.");
 
@@ -65,16 +65,10 @@ public static class DI
 		ServiceCollection services = new();
 
 		services.UseMicrosoftDependencyResolver();
-
-		RxAppBuilder
-			.CreateReactiveUIBuilder()
-			.WithWpf()
-			.BuildApp();
+		Locator.CurrentMutable.InitializeSplat();
+		Locator.CurrentMutable.InitializeReactiveUI(RegistrationNamespace.Wpf);
 
 		ConfigureServices(services);
-
-		ServiceProvider serviceProvider = services.BuildServiceProvider();
-		serviceProvider.UseMicrosoftDependencyResolver();
 	}
 
 	private static IServiceCollection ConfigureServices(IServiceCollection services)

@@ -1,5 +1,6 @@
-using BilibiliApi.Utils;
+﻿using BilibiliApi.Utils;
 using CryptoBase.DataFormatExtensions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
 
 namespace ApiTest;
@@ -15,8 +16,8 @@ public class WbiTest
 
 		(string imgKey, string subKey) = await httpClient.GetWbiKeyAsync();
 
-		Assert.HasCount(16, imgKey.FromHex());
-		Assert.HasCount(16, subKey.FromHex());
+		Assert.AreEqual(16, imgKey.FromHex().Length);
+		Assert.AreEqual(16, subKey.FromHex().Length);
 	}
 
 	[TestMethod]
@@ -34,7 +35,7 @@ public class WbiTest
 
 		await WbiUtils.SignAsync(query, (imgKey, subKey), ts);
 
-		Assert.HasCount(5, query);
+		Assert.AreEqual(5, query.Count);
 		Assert.AreEqual("1702204169", query["wts"]);
 		Assert.AreEqual("8f6f2b5b3d485fe1886cec6a0be8c5d4", query["w_rid"]);
 	}

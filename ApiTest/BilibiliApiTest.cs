@@ -4,6 +4,7 @@ using BilibiliApi.Model;
 using BilibiliApi.Model.DanmuConf;
 using BilibiliApi.Model.Login.QrCode.GetLoginUrl;
 using BilibiliLiveRecordDownLoader.Shared.Utils;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
 
 namespace ApiTest;
@@ -23,8 +24,8 @@ public class BilibiliApiTest
 
 		Assert.IsNotNull(json.data);
 		Assert.IsNotNull(json.data.host_list);
-		Assert.IsNotEmpty(json.data.host_list);
-		Assert.IsFalse(string.IsNullOrWhiteSpace(json.data.token));
+		Assert.IsTrue(json.data.host_list.Length > 0);
+		Assert.IsTrue(!string.IsNullOrWhiteSpace(json.data.token));
 
 		Assert.AreEqual(@"broadcastlv.chat.bilibili.com", json.data.host_list.Last().host);
 		Assert.AreEqual(2243, json.data.host_list.Last().port);
@@ -35,29 +36,16 @@ public class BilibiliApiTest
 	[TestMethod]
 	public async Task GetRoomUriTestAsync()
 	{
-		foreach ((Uri[] uris, string format) in await _apiClient.GetRoomStreamUriAsync(6))
+		(Uri[] hlsUris, string format) = await _apiClient.GetRoomStreamUriAsync(6);
+
+		Assert.AreNotEqual(0, hlsUris.Length);
+		Assert.AreEqual(@"fmp4", format);
+
+		foreach (Uri hlsUri in hlsUris)
 		{
-			Assert.AreNotEqual(0, uris.Length);
-
-			foreach (Uri uri in uris)
-			{
-				Assert.AreEqual(Uri.UriSchemeHttps, uri.Scheme);
-
-				if (format is @"fmp4" or @"ts")
-				{
-					Assert.AreEqual(@".m3u8", Path.GetExtension(uri.AbsolutePath));
-				}
-				else if (format is @"flv")
-				{
-					Assert.AreEqual(@".flv", Path.GetExtension(uri.AbsolutePath));
-				}
-				else
-				{
-					Assert.Fail("未知的格式");
-				}
-
-				Console.WriteLine(uri);
-			}
+			Assert.AreEqual(Uri.UriSchemeHttps, hlsUri.Scheme);
+			Assert.AreEqual(@".m3u8", Path.GetExtension(hlsUri.AbsolutePath));
+			Console.WriteLine(hlsUri);
 		}
 	}
 
@@ -79,33 +67,33 @@ public class BilibiliApiTest
 	{
 		GetLoginUrlMessage? json = await _apiClient.GetLoginUrlAsync();
 		Assert.IsNotNull(json);
-		Assert.AreEqual(0, json.code);
-		Assert.AreEqual(@"0", json.message);
+		Assert.AreEqual(json.code, 0);
+		Assert.AreEqual(json.message, @"0");
 		Assert.IsNotNull(json.data);
 
 		Assert.IsNotNull(json.data.url);
-		Assert.StartsWith(@"https://", json.data.url);
+		Assert.IsTrue(json.data.url.StartsWith(@"https://"));
 
 		Assert.IsNotNull(json.data.qrcode_key);
-		Assert.AreEqual(32, json.data.qrcode_key.Length);
+		Assert.AreEqual(json.data.qrcode_key.Length, 32);
 	}
 
 	[TestMethod]
 	public async Task GetLoginInfoTestAsync()
 	{
 		string cookie = await _apiClient.GetLoginInfoAsync(@"");// 设置 Key
-		Assert.Contains(@"sid=", cookie);
-		Assert.Contains(@"DedeUserID=", cookie);
-		Assert.Contains(@"DedeUserID__ckMd5=", cookie);
-		Assert.Contains(@"SESSDATA=", cookie);
-		Assert.Contains(@"bili_jct=", cookie);
+		Assert.IsTrue(cookie.Contains(@"sid="));
+		Assert.IsTrue(cookie.Contains(@"DedeUserID="));
+		Assert.IsTrue(cookie.Contains(@"DedeUserID__ckMd5="));
+		Assert.IsTrue(cookie.Contains(@"SESSDATA="));
+		Assert.IsTrue(cookie.Contains(@"bili_jct="));
 	}
 
 	[TestMethod]
 	public async Task GetLoginInfoFailTestAsync()
 	{
-		HttpRequestException ex = await Assert.ThrowsExactlyAsync<HttpRequestException>(async () => await _apiClient.GetLoginInfoAsync(string.Empty));
-		Assert.AreEqual(@"不存在该密钥", ex.Message);
+		HttpRequestException ex = await Assert.ThrowsExceptionAsync<HttpRequestException>(async () => await _apiClient.GetLoginInfoAsync(string.Empty));
+		Assert.AreEqual(ex.Message, @"不存在该密钥");
 	}
 
 	[TestMethod]
@@ -117,7 +105,7 @@ public class BilibiliApiTest
 	[TestMethod]
 	public async Task GetUidTestAsync()
 	{
-		Assert.IsGreaterThan(0, await _apiClient.GetUidAsync());
+		Assert.IsTrue(await _apiClient.GetUidAsync() > 0);
 	}
 
 	[TestMethod]

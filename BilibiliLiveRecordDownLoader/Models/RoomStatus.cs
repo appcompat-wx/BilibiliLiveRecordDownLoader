@@ -253,18 +253,16 @@ public class RoomStatus : ReactiveObject
 	private void StartMonitor()
 	{
 		_scope = _logger.BeginScope($@"开始监控房间 {{{LoggerProperties.RoomIdPropertyName}}}", RoomId);
-		_statusMonitor = this.WhenAnyValue(x => x.LiveStatus).ObserveOn(RxSchedulers.TaskpoolScheduler).Subscribe(_ => StatusUpdatedAsync().Forget());
-		_enableMonitor = this.WhenAnyValue(x => x.IsEnable).ObserveOn(RxSchedulers.TaskpoolScheduler).Subscribe(_ => EnableUpdatedAsync().Forget());
+		_statusMonitor = this.WhenAnyValue(x => x.LiveStatus).ObserveOn(RxApp.TaskpoolScheduler).Subscribe(_ => StatusUpdatedAsync().Forget());
+		_enableMonitor = this.WhenAnyValue(x => x.IsEnable).ObserveOn(RxApp.TaskpoolScheduler).Subscribe(_ => EnableUpdatedAsync().Forget());
 		this.RaisePropertyChanged(nameof(LiveStatus));
-		_titleMonitor = this.WhenAnyValue(x => x.Title).Subscribe
-		(title =>
+		_titleMonitor = this.WhenAnyValue(x => x.Title).Subscribe(title =>
+		{
+			if (title is not null)
 			{
-				if (title is not null)
-				{
-					_logger.LogInformation(@"[TitleChanged] {title}", title);
-				}
+				_logger.LogInformation(@"[TitleChanged] {title}", title);
 			}
-		);
+		});
 		this.RaisePropertyChanged(nameof(Title));
 		BuildDanmuClientAsync().Forget();
 		BuildHttpCheckMonitor();
@@ -320,20 +318,16 @@ public class RoomStatus : ReactiveObject
 						}
 					}
 
+					Uri[] uri;
 					string format;
-					IEnumerable<(Uri[], string)> list;
-					ILiveStreamRecorder liveStreamRecorder;
 
 					try
 					{
-						list = await _apiClient.GetRoomStreamUriAsync
-						(
-							RoomId,
+						(uri, format) = await _apiClient.GetRoomStreamUriAsync(RoomId,
 							(long)Qn,
 							!string.IsNullOrEmpty(AutoRecordCodecOrder) ? AutoRecordCodecOrder : _config.AutoRecordCodecOrder,
 							!string.IsNullOrEmpty(AutoRecordFormatOrder) ? AutoRecordFormatOrder : _config.AutoRecordFormatOrder,
-							cancellationToken
-						);
+							cancellationToken);
 					}
 					catch (HttpRequestException)
 					{
@@ -341,81 +335,61 @@ public class RoomStatus : ReactiveObject
 						throw;
 					}
 
-					async ValueTask<(ILiveStreamRecorder, string format)> SelectStreamAsync()
+					_logger.LogInformation(@"直播流：{uri}", (object)uri);
+					_logger.LogInformation(@"直播流格式：{format}", format);
+
+					await using ILiveStreamRecorder recorder = type switch
 					{
-						foreach ((Uri[] currentUris, string currentFormat) in list)
-						{
-							_logger.LogInformation(@"直播流：{uri}", (object)currentUris);
-							_logger.LogInformation(@"直播流格式：{format}", currentFormat);
+						RecorderType.FFmpeg => DI.GetRequiredService<FFmpegLiveStreamRecorder>(),
+						RecorderType.Auto when format.Equals(@"flv", StringComparison.OrdinalIgnoreCase) => DI.GetRequiredService<HttpFlvLiveStreamRecorder>(),
+						RecorderType.Auto => DI.GetRequiredService<HttpLiveStreamRecorder>(),
+						_ => throw Assumes.NotReachable()
+					};
 
-							ILiveStreamRecorder currentRecorder = type switch
-							{
-								RecorderType.FFmpeg => DI.GetRequiredService<FFmpegLiveStreamRecorder>(),
-								RecorderType.Auto when currentFormat.Equals(@"flv", StringComparison.OrdinalIgnoreCase) => DI.GetRequiredService<HttpFlvLiveStreamRecorder>(),
-								RecorderType.Auto => DI.GetRequiredService<HttpLiveStreamRecorder>(),
-								_ => Assumes.NotReachable<ILiveStreamRecorder>()
-							};
+					recorder.Client.Timeout = TimeSpan.FromSeconds(StreamConnectTimeout);
+					recorder.RoomId = RoomId;
 
-							try
-							{
-								currentRecorder.Client.Timeout = TimeSpan.FromSeconds(StreamConnectTimeout);
-								currentRecorder.RoomId = RoomId;
-
-								IStreamUriSelector selector = DI.GetRequiredService<IStreamUriSelector>();
-								selector.Client = currentRecorder.Client;
-								Uri source = await selector.GetUriAsync(currentUris, cancellationToken);
-
-								_logger.LogInformation(@"选择直播地址：{uri}", source);
-
-								await currentRecorder.InitializeAsync(source, cancellationToken);
-
-								return (currentRecorder, currentFormat);
-							}
-							catch (Exception ex)
-							{
-								await currentRecorder.DisposeAsync();
-
-								switch (ex)
-								{
-									case TaskCanceledException:
-									{
-										_logger.LogInformation(@"尝试下载直播流超时");
-										break;
-									}
-									case HttpRequestException { StatusCode: not null } e:
-									{
-										_logger.LogInformation(@"尝试下载直播流时服务器返回了 {statusCode}", e.StatusCode);
-										break;
-									}
-									case HttpRequestException:
-									{
-										_logger.LogInformation(@"尝试下载直播流时发生错误 {message}", ex.Message);
-										break;
-									}
-									default:
-									{
-										_logger.LogWarning(ex, @"尝试下载直播流时发生错误");
-										break;
-									}
-								}
-							}
-						}
-
-						throw new HttpRequestException("尝试连接所有直播流均失败");
-					}
+					Task waitReconnect = Task.Delay(TimeSpan.FromSeconds(StreamReconnectLatency), cancellationToken);
 
 					try
 					{
-						(liveStreamRecorder, format) = await SelectStreamAsync();
+						IStreamUriSelector selector = DI.GetRequiredService<IStreamUriSelector>();
+						selector.Client = recorder.Client;
+						Uri source = await selector.GetUriAsync(uri, cancellationToken);
+
+						_logger.LogInformation(@"选择直播地址：{uri}", source);
+
+						await recorder.InitializeAsync(source, cancellationToken);
 					}
 					catch (Exception ex)
 					{
-						_logger.LogError(ex, @"无法连接直播流，{latency} 秒后重试", StreamReconnectLatency);
-						await Task.Delay(TimeSpan.FromSeconds(StreamReconnectLatency), cancellationToken);
+						switch (ex)
+						{
+							case TaskCanceledException:
+							{
+								_logger.LogInformation(@"尝试下载直播流超时");
+								break;
+							}
+							case HttpRequestException { StatusCode: not null } e:
+							{
+								_logger.LogInformation(@"尝试下载直播流时服务器返回了 {statusCode}", e.StatusCode);
+								break;
+							}
+							case HttpRequestException:
+							{
+								_logger.LogInformation(@"尝试下载直播流时发生错误 {message}", ex.Message);
+								break;
+							}
+							default:
+							{
+								_logger.LogError(ex, @"尝试下载直播流时发生错误");
+								break;
+							}
+						}
+
+						await waitReconnect;
 						continue;
 					}
-
-					await using ILiveStreamRecorder recorder = liveStreamRecorder;
 
 					RecordStatus = RecordStatus.录制中;
 
@@ -447,28 +421,26 @@ public class RoomStatus : ReactiveObject
 					{
 						DateTime lastDataReceivedTime = DateTime.Now;
 						using CancellationTokenSource recordStreamCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-						using IDisposable speedMonitor = recorder.CurrentSpeed.Subscribe
-						(b =>
+						using IDisposable speedMonitor = recorder.CurrentSpeed.Subscribe(b =>
+						{
+							Speed = b.ToHumanBytesString() + @"/s";
+							DateTime now = DateTime.Now;
+
+							if (b > 0.0)
 							{
-								Speed = b.ToHumanBytesString() + @"/s";
-								DateTime now = DateTime.Now;
-
-								if (b > 0.0)
-								{
-									lastDataReceivedTime = now;
-								}
-								else if (now - lastDataReceivedTime > TimeSpan.FromSeconds(StreamTimeout))
-								{
-									if (LiveStatus is LiveStatus.直播)
-									{
-										_logger.LogWarning(@"录播不稳定，即将尝试重连");
-									}
-
-									// ReSharper disable once AccessToDisposedClosure
-									recordStreamCts.Cancel();
-								}
+								lastDataReceivedTime = now;
 							}
-						);
+							else if (now - lastDataReceivedTime > TimeSpan.FromSeconds(StreamTimeout))
+							{
+								if (LiveStatus is LiveStatus.直播)
+								{
+									_logger.LogWarning(@"录播不稳定，即将尝试重连");
+								}
+
+								// ReSharper disable once AccessToDisposedClosure
+								recordStreamCts.Cancel();
+							}
+						});
 						await recorder.DownloadAsync(filePath, recordStreamCts.Token);
 					}
 					finally
@@ -748,7 +720,10 @@ public class RoomStatus : ReactiveObject
 		{
 			DanMuReconnectLatency = room.DanMuReconnectLatency;
 
-			_danmuClient?.RetryInterval = TimeSpan.FromSeconds(DanMuReconnectLatency);
+			if (_danmuClient is not null)
+			{
+				_danmuClient.RetryInterval = TimeSpan.FromSeconds(DanMuReconnectLatency);
+			}
 		}
 
 		if (!HttpCheckLatency.Equals(room.HttpCheckLatency))

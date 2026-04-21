@@ -65,15 +65,17 @@ public class Config : ReactiveObject
 	[Reactive]
 	public string Cookie { get; set; } = DefaultCookie;
 
+	private List<RoomStatus> _rooms = [];
+
 	public List<RoomStatus> Rooms
 	{
-		get;
+		get => _rooms;
 		set
 		{
-			this.RaiseAndSetIfChanged(ref field, value);
-			field = field.Distinct().AsList();
+			this.RaiseAndSetIfChanged(ref _rooms, value);
+			_rooms = _rooms.Distinct().AsList();
 		}
-	} = [];
+	}
 
 	[DefaultValue(DefaultIsAutoConvertMp4)]
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
