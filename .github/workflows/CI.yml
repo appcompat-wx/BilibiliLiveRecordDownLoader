@@ -2,8 +2,8 @@ name: CI
 on: [push, pull_request, workflow_dispatch]
 env:
   ProjectName: BilibiliLiveRecordDownLoader
-  NET_TFM: net10.0-windows10.0.26100.0
-  NET_VERSION: 10.0.x
+  NET_TFM: net9.0-windows10.0.26100.0
+  Configuration: Release
 
 jobs:
   build:
@@ -14,10 +14,15 @@ jobs:
       matrix:
         Rid: [generic, win-x64, win-x86, win-arm64]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          dotnet-version: ${{ env.NET_VERSION }}
+          submodules: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
       - name: Build ${{ matrix.Rid }}
         shell: pwsh
@@ -25,18 +30,15 @@ jobs:
 
       - name: Upload ${{ matrix.Rid }}
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ProjectName }}-${{ matrix.Rid }}
-          path: ${{ env.ProjectName }}\bin\Release\${{ env.NET_TFM }}\${{ matrix.Rid }}\publish\
+          path: ${{ env.ProjectName }}\bin\${{ env.Configuration }}\${{ env.NET_TFM }}\${{ matrix.Rid }}\publish\
 
   nuget:
     name: Nuget
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      packages: write
     strategy:
       matrix:
         PackageName:
@@ -46,26 +48,23 @@ jobs:
           ]
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.NET_VERSION }}
+          dotnet-version: 9.0.x
 
       - name: Build
-        working-directory: ${{ matrix.PackageName }}
-        run: dotnet pack
+        shell: pwsh
+        run: dotnet build -c Release ${{ matrix.PackageName }}\${{ matrix.PackageName }}.csproj
 
-      - name: NuGet Login
-        uses: NuGet/login@v1
-        id: nuget-login
-        with:
-          user: ${{ secrets.NUGET_USER }}
-
-      - name: Push to NuGet
-        working-directory: ${{ matrix.PackageName }}/bin/Release
+      - name: Push nuget packages
+        shell: pwsh
         run: |
-          dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --skip-duplicate
-          dotnet nuget push *.nupkg -s https://nuget.pkg.github.com/HMBSbige -k ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+          dotnet nuget push ${{ matrix.PackageName }}\bin\Release\*.nupkg -s https://nuget.pkg.github.com/HMBSbige -k ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+          dotnet nuget push ${{ matrix.PackageName }}\bin\Release\*.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NuGetAPIKey }} --skip-duplicate
 
   release:
     name: Release
@@ -73,10 +72,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-dotnet@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          dotnet-version: ${{ env.NET_VERSION }}
+          submodules: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
       - name: Build
         shell: pwsh
@@ -87,7 +91,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path C:\builtfiles -Force > $null
           $zip_path = "C:\builtfiles\$env:ProjectName-generic-${{ github.ref_name }}.7z"
-          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\Release\$env:NET_TFM\generic\publish\"
+          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\$env:Configuration\$env:NET_TFM\generic\publish\"
           7z rn "$zip_path" publish $env:ProjectName
           echo "GENERIC_SHA256=$((Get-FileHash $zip_path -Algorithm SHA256).Hash)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -96,7 +100,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path C:\builtfiles -Force > $null
           $zip_path = "C:\builtfiles\$env:ProjectName-win-x64-${{ github.ref_name }}.7z"
-          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\Release\$env:NET_TFM\win-x64\publish\"
+          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\$env:Configuration\$env:NET_TFM\win-x64\publish\"
           7z rn "$zip_path" publish $env:ProjectName
           echo "WINX64_SHA256=$((Get-FileHash $zip_path -Algorithm SHA256).Hash)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -105,7 +109,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path C:\builtfiles -Force > $null
           $zip_path = "C:\builtfiles\$env:ProjectName-win-arm64-${{ github.ref_name }}.7z"
-          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\Release\$env:NET_TFM\win-arm64\publish\"
+          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\$env:Configuration\$env:NET_TFM\win-arm64\publish\"
           7z rn "$zip_path" publish $env:ProjectName
           echo "WINARM64_SHA256=$((Get-FileHash $zip_path -Algorithm SHA256).Hash)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -114,7 +118,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path C:\builtfiles -Force > $null
           $zip_path = "C:\builtfiles\$env:ProjectName-win-x86-${{ github.ref_name }}.7z"
-          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\Release\$env:NET_TFM\win-x86\publish\"
+          7z a -mx9 "$zip_path" ".\$env:ProjectName\bin\$env:Configuration\$env:NET_TFM\win-x86\publish\"
           7z rn "$zip_path" publish $env:ProjectName
           echo "WINX86_SHA256=$((Get-FileHash $zip_path -Algorithm SHA256).Hash)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 

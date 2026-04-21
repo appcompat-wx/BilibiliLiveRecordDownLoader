@@ -1,4 +1,4 @@
-using BilibiliApi.Enums;
+﻿using BilibiliApi.Enums;
 
 namespace BilibiliApi.Model;
 

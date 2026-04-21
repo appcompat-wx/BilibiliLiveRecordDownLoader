@@ -1,6 +1,6 @@
 using BilibiliLiveRecordDownLoader.ViewModels;
 using ReactiveUI;
-using System.Reactive.Disposables.Fluent;
+using System.Reactive.Disposables;
 
 namespace BilibiliLiveRecordDownLoader.Views;
 

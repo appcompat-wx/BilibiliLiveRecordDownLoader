@@ -1,6 +1,7 @@
 using BilibiliApi.Enums;
 using BilibiliApi.Model;
 using BilibiliApi.Model.PlayUrl;
+using DynamicData;
 using System.Text.Json;
 
 namespace BilibiliApi.Clients;
@@ -18,16 +19,16 @@ public partial class BilibiliApiClient
 	/// <returns></returns>
 	public async Task<RoomPlayInfo?> GetRoomPlayInfoAsync(long roomId, long qn = 10000, CancellationToken token = default)
 	{
-		string url = $@"https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id={roomId}&no_playurl=0&qn={qn}&platform=web&protocol=0,1&format=0,1,2&codec=0,1,2";
+		string url = $@"https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id={roomId}&no_playurl=0&qn={qn}&platform=web&protocol=0,1&format=0,1,2&codec=0,1";
 		return await GetJsonAsync<RoomPlayInfo>(url, token);
 	}
 
-	public const string DefaultCodecOrder = @"avc;hevc;av1";
+	public const string DefaultCodecOrder = @"avc;hevc";
 	public const string DefaultFormatOrder = @"fmp4;ts;flv";
 
 	private record StreamUriInfo(string Protocol, string Format, RoomPlayInfoStreamCodec Codec);
 
-	public async Task<IEnumerable<(Uri[], string)>> GetRoomStreamUriAsync(long roomId, long qn = 10000, string? codecOrder = default, string? formatOrder = default, CancellationToken cancellationToken = default)
+	public async Task<(Uri[], string)> GetRoomStreamUriAsync(long roomId, long qn = 10000, string? codecOrder = default, string? formatOrder = default, CancellationToken cancellationToken = default)
 	{
 		RoomPlayInfo? message = await GetRoomPlayInfoAsync(roomId, qn, cancellationToken);
 
@@ -89,11 +90,22 @@ public partial class BilibiliApiClient
 		string[] codecOrderByDescending = GetOrderByDescending(codecOrder, DefaultCodecOrder);
 		string[] formatOrderByDescending = GetOrderByDescending(formatOrder, DefaultFormatOrder);
 
-		return GetResult
-		(
-			list.OrderByDescending(x => codecOrderByDescending.IndexOf(x.Codec.CodecName, StringComparer.OrdinalIgnoreCase))
-				.ThenByDescending(x => formatOrderByDescending.IndexOf(x.Format, StringComparer.OrdinalIgnoreCase))
-		);
+		StreamUriInfo info = list.OrderByDescending(x => codecOrderByDescending.IndexOf(x.Codec.CodecName, StringComparer.OrdinalIgnoreCase))
+			.ThenByDescending(x => formatOrderByDescending.IndexOf(x.Format, StringComparer.OrdinalIgnoreCase))
+			.First();
+
+		RoomPlayInfoStreamUrlInfo[] uriInfo = info.Codec.UrlInfo!.Where(GetValidUrlInfo).ToArray();
+
+		Uri[] result = new Uri[uriInfo.LongLength];
+
+		string baseUrl = info.Codec.BaseUrl!;
+
+		for (long i = 0; i < result.LongLength; ++i)
+		{
+			result[i] = new Uri(uriInfo[i].Host + baseUrl + uriInfo[i].Extra);
+		}
+
+		return (result, info.Format);
 
 		static string[] GetOrderByDescending(string? order, string defaultValue)
 		{
@@ -109,8 +121,7 @@ public partial class BilibiliApiClient
 
 				if (r.Length is not 0)
 				{
-					r.AsSpan().Reverse();
-					return r;
+					return r.Reverse().ToArray();
 				}
 
 				order = defaultValue;
@@ -120,25 +131,6 @@ public partial class BilibiliApiClient
 		static bool GetValidUrlInfo(RoomPlayInfoStreamUrlInfo x)
 		{
 			return !string.IsNullOrEmpty(x.Host) && x.Host.StartsWith(@"https://");
-		}
-
-		static IEnumerable<(Uri[], string)> GetResult(IEnumerable<StreamUriInfo> uriInfos)
-		{
-			foreach (StreamUriInfo info in uriInfos)
-			{
-				RoomPlayInfoStreamUrlInfo[] uriInfo = info.Codec.UrlInfo!.Where(GetValidUrlInfo).ToArray();
-
-				Uri[] result = new Uri[uriInfo.LongLength];
-
-				string baseUrl = info.Codec.BaseUrl!;
-
-				for (long i = 0; i < result.LongLength; ++i)
-				{
-					result[i] = new Uri(uriInfo[i].Host + baseUrl + uriInfo[i].Extra);
-				}
-
-				yield return (result, info.Format);
-			}
 		}
 	}
 
@@ -158,7 +150,12 @@ public partial class BilibiliApiClient
 		{
 			string url = $@"https://api.live.bilibili.com/room/v1/Room/get_info?id={roomId}";
 
-			JsonDocument? json = await GetJsonAsync<JsonDocument>(url, cancellationToken) ?? throw ThrowException();
+			JsonDocument? json = await GetJsonAsync<JsonDocument>(url, cancellationToken);
+
+			if (json is null)
+			{
+				throw ThrowException();
+			}
 
 			JsonElement root = json.RootElement;
 

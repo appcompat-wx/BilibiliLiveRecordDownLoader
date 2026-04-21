@@ -43,7 +43,7 @@ public partial class QrCodeLoginDialog
 	{
 		return Observable.Interval(TimeSpan.FromSeconds(3))
 			.TakeWhile(x => x < TimeSpan.FromSeconds(180).TotalSeconds)
-			.ObserveOn(RxSchedulers.MainThreadScheduler)
+			.ObserveOn(RxApp.MainThreadScheduler)
 			.SelectMany(Async)
 			.Subscribe();
 

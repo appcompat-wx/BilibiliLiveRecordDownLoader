@@ -9,7 +9,10 @@ public static class HttpClientUtils
 	{
 		HttpClient client = new(handler, false);
 
-		client.DefaultRequestHeaders.Add(@"Cookie", cookie.TryAddCookie(@"buvid3", Guid.NewGuid().ToString().ToUpperInvariant() + @"infoc"));
+		if (!string.IsNullOrWhiteSpace(cookie))
+		{
+			client.DefaultRequestHeaders.Add(@"Cookie", cookie);
+		}
 
 		client.DefaultRequestVersion = HttpVersion.Version30;
 		client.Timeout = TimeSpan.FromSeconds(10);

@@ -1,7 +1,7 @@
 using BilibiliLiveRecordDownLoader.Utils;
 using BilibiliLiveRecordDownLoader.ViewModels;
 using ReactiveUI;
-using System.Reactive.Disposables.Fluent;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows;
 
@@ -40,7 +40,7 @@ public partial class FFmpegCommandView
 
 			ViewModel.CheckFFmpegStatusCommand
 				.Execute()
-				.ObserveOn(RxSchedulers.MainThreadScheduler)
+				.ObserveOn(RxApp.MainThreadScheduler)
 				.Subscribe(b =>
 				{
 					HyperlinkButton.Visibility = b ? Visibility.Collapsed : Visibility.Visible;

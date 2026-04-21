@@ -3,6 +3,7 @@ using BilibiliApi.Model.Login.Password.GetKey;
 using BilibiliApi.Model.Login.Password.GetTokenInfo;
 using BilibiliApi.Model.Login.Password.OAuth2;
 using BilibiliLiveRecordDownLoader.Shared.Utils;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using static ApiTest.TestConstants;
 
 #pragma warning disable 8602
@@ -19,9 +20,9 @@ public class BilibiliLoginTest
 		GetKeyData data = await _apiClient.GetKeyAsync();
 		Console.WriteLine(data.hash);
 		Console.WriteLine(data.key);
-		Assert.AreEqual(16, data.hash.Length);
-		Assert.StartsWith("-----BEGIN PUBLIC KEY-----\n", data.key);
-		Assert.EndsWith("\n-----END PUBLIC KEY-----\n", data.key);
+		Assert.AreEqual(data.hash.Length, 16);
+		Assert.IsTrue(data.key.StartsWith("-----BEGIN PUBLIC KEY-----\n"));
+		Assert.IsTrue(data.key.EndsWith("\n-----END PUBLIC KEY-----\n"));
 	}
 
 	[TestMethod]
@@ -35,21 +36,20 @@ public class BilibiliLoginTest
 		Console.WriteLine(Timestamp.GetTime(message.ts).ToLocalTime().ToString(@"yyyyMMdd_HHmmss"));
 
 		//token_info
-		Assert.IsGreaterThan(0, message.data.token_info.mid);
+		Assert.IsTrue(message.data.token_info.mid > 0);
 		Assert.AreEqual(32, message.data.token_info.access_token.Length);
 		Assert.AreEqual(32, message.data.token_info.refresh_token.Length);
 		Console.WriteLine(TimeSpan.FromSeconds(message.data.token_info.expires_in));
 
 		//cookie_info
 		BilibiliCookie[]? cookies = message.data.cookie_info.cookies;
-		Assert.IsNotNull(cookies);
-		Assert.IsNotEmpty(cookies);
+		Assert.IsTrue(cookies.Length > 0);
 		HashSet<string?> names = cookies.Select(x => x.name).ToHashSet();
-		Assert.Contains(@"bili_jct", names);
-		Assert.Contains(@"DedeUserID", names);
-		Assert.Contains(@"DedeUserID__ckMd5", names);
-		Assert.Contains(@"sid", names);
-		Assert.Contains(@"SESSDATA", names);
+		Assert.IsTrue(names.Contains(@"bili_jct"));
+		Assert.IsTrue(names.Contains(@"DedeUserID"));
+		Assert.IsTrue(names.Contains(@"DedeUserID__ckMd5"));
+		Assert.IsTrue(names.Contains(@"sid"));
+		Assert.IsTrue(names.Contains(@"SESSDATA"));
 	}
 
 	[TestMethod]
@@ -60,7 +60,7 @@ public class BilibiliLoginTest
 		Assert.AreEqual(0, message.code);
 		Console.WriteLine(Timestamp.GetTime(message.ts).ToLocalTime().ToString(@"yyyyMMdd_HHmmss"));
 
-		Assert.IsGreaterThan(0, message.data.mid);
+		Assert.IsTrue(message.data.mid > 0);
 		Assert.AreEqual(32, message.data.access_token.Length);
 		Console.WriteLine(TimeSpan.FromSeconds(message.data.expires_in));
 		Console.WriteLine(message.data.refresh);
@@ -84,20 +84,19 @@ public class BilibiliLoginTest
 		Console.WriteLine(Timestamp.GetTime(message.ts).ToLocalTime().ToString(@"yyyyMMdd_HHmmss"));
 
 		//token_info
-		Assert.IsGreaterThan(0, message.data.token_info.mid);
+		Assert.IsTrue(message.data.token_info.mid > 0);
 		Assert.AreEqual(32, message.data.token_info.access_token.Length);
 		Assert.AreEqual(32, message.data.token_info.refresh_token.Length);
 		Console.WriteLine(TimeSpan.FromSeconds(message.data.token_info.expires_in));
 
 		//cookie_info
 		BilibiliCookie[]? cookies = message.data.cookie_info.cookies;
-		Assert.IsNotNull(cookies);
-		Assert.IsNotEmpty(cookies);
+		Assert.IsTrue(cookies.Length > 0);
 		HashSet<string?> names = cookies.Select(x => x.name).ToHashSet();
-		Assert.Contains(@"bili_jct", names);
-		Assert.Contains(@"DedeUserID", names);
-		Assert.Contains(@"DedeUserID__ckMd5", names);
-		Assert.Contains(@"sid", names);
-		Assert.Contains(@"SESSDATA", names);
+		Assert.IsTrue(names.Contains(@"bili_jct"));
+		Assert.IsTrue(names.Contains(@"DedeUserID"));
+		Assert.IsTrue(names.Contains(@"DedeUserID__ckMd5"));
+		Assert.IsTrue(names.Contains(@"sid"));
+		Assert.IsTrue(names.Contains(@"SESSDATA"));
 	}
 }

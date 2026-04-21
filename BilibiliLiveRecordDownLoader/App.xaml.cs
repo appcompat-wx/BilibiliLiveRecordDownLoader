@@ -7,7 +7,6 @@ using SingleInstance;
 using System.IO;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Windows;
 
@@ -60,7 +59,7 @@ public partial class App
 			return;
 		}
 
-		_singleInstance.Received.ObserveOn(RxSchedulers.TaskpoolScheduler).Subscribe(ArgumentsReceived).DisposeWith(_disposable);
+		_singleInstance.Received.ObserveOn(RxApp.TaskpoolScheduler).Subscribe(ArgumentsReceived).DisposeWith(_disposable);
 		_singleInstance.StartListenServer();
 
 		DI.Register();
@@ -113,7 +112,7 @@ public partial class App
 
 			if (args.Contains(Constants.ParameterShow))
 			{
-				RxSchedulers.MainThreadScheduler.Schedule(() => DI.GetRequiredService<MainWindow>().ShowWindow());
+				RxApp.MainThreadScheduler.Schedule(() => DI.GetRequiredService<MainWindow>().ShowWindow());
 				endFunc(Constants.ParameterShow);
 				return;
 			}

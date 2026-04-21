@@ -5,7 +5,7 @@ using Hardcodet.Wpf.TaskbarNotification;
 using ModernWpf.Controls;
 using ReactiveMarbles.ObservableEvents;
 using ReactiveUI;
-using System.Reactive.Disposables.Fluent;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Forms;
@@ -86,7 +86,7 @@ public partial class MainWindow
 
 			MessageBus.Current.Listen<RoomStatus>()
 				.Where(room => room.LiveStatus == LiveStatus.直播)
-				.ObserveOn(RxSchedulers.MainThreadScheduler)
+				.ObserveOn(RxApp.MainThreadScheduler)
 				.Subscribe(room => NotifyIcon.ShowBalloonTip($@"{room.UserName} 开播了！", room.Title, BalloonIcon.Info)).DisposeWith(d);
 
 			#region CloseReasonHack

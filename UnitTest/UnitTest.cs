@@ -5,6 +5,7 @@ using CryptoBase.Abstractions.Digests;
 using CryptoBase.DataFormatExtensions;
 using CryptoBase.Digests;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Diagnostics;
 
 namespace UnitTest;
@@ -42,7 +43,7 @@ public class UnitTest
 			await downloader.DownloadAsync(default);
 
 			Assert.IsTrue(File.Exists(outFile));
-			Assert.AreEqual(sha256, await CalculateSHA256Async(outFile));
+			Assert.AreEqual(await CalculateSHA256Async(outFile), sha256);
 
 			return outFile;
 		}
@@ -73,7 +74,7 @@ public class UnitTest
 			Console.WriteLine(sw.Elapsed.TotalSeconds);
 
 			Assert.IsTrue(File.Exists(outFlv));
-			Assert.AreEqual(sha256, await CalculateSHA256Async(outFlv));
+			Assert.AreEqual(await CalculateSHA256Async(outFlv), sha256);
 		}
 		finally
 		{
@@ -102,7 +103,7 @@ public class UnitTest
 			await downloader.DownloadAsync();
 
 			Assert.IsTrue(File.Exists(outFile));
-			Assert.AreEqual(sha256, await CalculateSHA256Async(outFile));
+			Assert.AreEqual(await CalculateSHA256Async(outFile), sha256);
 		}
 		finally
 		{
